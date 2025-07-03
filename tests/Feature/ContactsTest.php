@@ -4,24 +4,28 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
-use PHPUnit\Framework\Attributes\Test;
+use App\Models\Contact;
 use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
-class CreateContactsTest extends TestCase
+class ContactsTest extends TestCase
 {
+    use RefreshDatabase, WithFaker;
+
     #[Test]
     public function it_should_be_able_to_create_a_new_contact(): void
     {
+        $this->withoutVite();
+
         $data = [
             'name' => 'Rodolfo Meri',
             'email' => 'rodolfomeri@contato.com',
             'phone' => '(41) 98899-4422'
         ];
 
-        $response = $this->post('/contacts', $data);
+        $response = $this->post(route('contacts.store'), $data);
 
-        $response->assertStatus(200);
-
+        $response->assertRedirect(route('contacts.index'));
 
         $expected = $data;
         $expected['phone'] = preg_replace('/\D/', '', $expected['phone']);
@@ -38,7 +42,7 @@ class CreateContactsTest extends TestCase
             'phone' => '419'
         ];
 
-        $response = $this->post('/contacts', $data);
+        $response = $this->post(route('contacts.store'), $data);
 
         $response->assertSessionHasErrors([
             'name',
@@ -52,37 +56,36 @@ class CreateContactsTest extends TestCase
     #[Test]
     public function it_should_be_able_to_list_contacts_paginated_by_10_items_per_page(): void
     {
-        \App\Models\Contact::factory(20)->create();
+        $this->withoutVite();
 
-        $response = $this->get('/contacts');
+        Contact::factory(20)->create();
+
+        $response = $this->get(route('contacts.index'));
 
         $response->assertStatus(200);
 
-        $response->assertViewIs('contacts.index');
-
-        $response->assertViewHas('contacts');
-
-        $contacts = $response->viewData('contacts');
-
-        $this->assertCount(10, $contacts);
+        $response->assertInertia(fn ($page) => $page
+            ->component('Contacts/Index')
+            ->has('contacts.data', 10)
+        );
     }
 
     #[Test]
     public function it_should_be_able_to_delete_a_contact(): void
     {
-        $contact = \App\Models\Contact::factory()->create();
+        $contact = Contact::factory()->create();
 
-        $response = $this->delete("/contacts/{$contact->id}");
+        $response = $this->delete(route('contacts.destroy', $contact));
 
-        $response->assertStatus(200);
+        $response->assertRedirect(route('contacts.index'));
 
-        $this->assertDatabaseMissing('contacts', $contact->toArray());
+        $this->assertDatabaseMissing('contacts', ['id' => $contact->id]);
     }
 
     #[Test]
     public function the_contact_email_should_be_unique(): void
     {
-        $contact = \App\Models\Contact::factory()->create();
+        $contact = Contact::factory()->create();
 
         $data = [
             'name' => 'Rodolfo Meri',
@@ -90,11 +93,9 @@ class CreateContactsTest extends TestCase
             'phone' => '(41) 98899-4422'
         ];
 
-        $response = $this->post('/contacts', $data);
+        $response = $this->post(route('contacts.store'), $data);
 
-        $response->assertSessionHasErrors([
-            'email'
-        ]);
+        $response->assertSessionHasErrors(['email']);
 
         $this->assertDatabaseCount('contacts', 1);
     }
@@ -102,7 +103,7 @@ class CreateContactsTest extends TestCase
     #[Test]
     public function it_should_be_able_to_update_a_contact(): void
     {
-        $contact = \App\Models\Contact::factory()->create();
+        $contact = Contact::factory()->create();
 
         $data = [
             'name' => 'Rodolfo Meri',
@@ -110,16 +111,13 @@ class CreateContactsTest extends TestCase
             'phone' => '(41) 98899-4422'
         ];
 
-        $response = $this->put("/contacts/{$contact->id}", $data);
+        $response = $this->put(route('contacts.update', $contact), $data);
 
-        $response->assertStatus(200);
+        $response->assertRedirect(route('contacts.index'));
 
         $expected = $data;
-
         $expected['phone'] = preg_replace('/\D/', '', $expected['phone']);
 
         $this->assertDatabaseHas('contacts', $expected);
-
-        $this->assertDatabaseMissing('contacts', $contact->toArray());
     }
 }
